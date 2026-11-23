@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 
 	"strings"
 	"time"
@@ -29,7 +30,20 @@ var viewerHTML string
 //go:embed viewer.js
 var viewerJS string
 
-var reportPage = template.Must(template.New("page").Funcs(template.FuncMap{"prettyArgs": func(raw string) string {
+func formatNumber(n int64) string {
+	value, suffix := float64(n), ""
+	switch {
+	case n >= 1_000_000:
+		value, suffix = value/1_000_000, "M"
+	case n >= 1_000:
+		value, suffix = value/1_000, "K"
+	default:
+		return strconv.FormatInt(n, 10)
+	}
+	return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", value), "0"), ".") + suffix
+}
+
+var reportPage = template.Must(template.New("page").Funcs(template.FuncMap{"number": formatNumber, "prettyArgs": func(raw string) string {
 	var b bytes.Buffer
 	if err := json.Indent(&b, []byte(raw), "", "  "); err != nil {
 		return raw

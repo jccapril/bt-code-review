@@ -1,10 +1,24 @@
-{{define "usage"}}模型请求 {{.Requests}} 次{{if .Reported}} · 输入 {{.Input}} · 输出 {{.Output}} · 合计 {{.Total}} token{{if .Cached}} · 缓存读取 {{.Cached}}{{end}}{{if .CacheWrite}} · 缓存写入 {{.CacheWrite}}{{end}}{{end}}{{if lt .Reported .Requests}} · {{.Reported}}/{{.Requests}} 次请求返回用量{{end}}{{end}}
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BT Code Review</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f8f9f6;color:#193333;font:16px/1.55 system-ui,sans-serif}header{background:#163a38;color:white;padding:16px max(5vw,24px)}header a{color:inherit;font-weight:700;text-decoration:none}main{max-width:1120px;margin:40px auto;padding:0 24px}h1{font-size:32px;letter-spacing:-.035em}a{color:#126b5d}article,details{background:white;border:1px solid #d4dfd9;border-radius:8px;margin:14px 0;padding:15px 18px}summary{cursor:pointer;font-weight:600;overflow-wrap:anywhere}.meta,small{color:#516660}.issue{border-left:3px solid #c68030;padding-left:14px}.issue p{white-space:pre-wrap}.patch{overflow:auto;background:#f4f6f4;padding:10px 0}.patch code{display:block;white-space:pre;padding:0 12px;font:13px/1.55 ui-monospace,monospace;min-height:1.55em}.added{background:#dff5de}.removed{background:#ffdfdf}.hunk{color:#236778}dd{margin:0}h2{font-size:21px}nav a{display:block}time{font-size:.9em}
 .tool pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:22rem;overflow:auto;background:#f4f6f4;padding:12px;font:13px/1.6 ui-monospace,monospace}.tool h4{margin:12px 0 4px}.tool pre{margin-top:0}.failed{color:#952f19}
 input,select,button{font:inherit}button{cursor:pointer}label,button,select{margin:4px}pre{white-space:pre-wrap;overflow-wrap:anywhere}article,p,code{overflow-wrap:anywhere}[hidden]{display:none!important}nav.pager{display:flex;align-items:center;gap:10px}section{margin:24px 0}h3{margin-bottom:4px}
+
+.usage-grid {
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:20px;
+  padding:20px 24px;margin:0;background:white;border:1px solid #d4dfd9;border-radius:10px;
+}
+.usage-grid dt {color:#516660;font-size:.8rem;font-weight:500;margin-bottom:5px}
+.usage-grid dd {font-size:1.5rem;font-weight:700;line-height:1.2;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.usage-detail {background:transparent;border:0;padding:0}
+.usage-detail summary {font-size:.9rem;padding:4px 0}
+.usage-table {overflow-x:auto;margin-top:8px}
+.usage-table table {width:100%;border-collapse:collapse;background:white;font-size:.86rem}
+.usage-table th,.usage-table td {padding:8px 12px;border-bottom:1px solid #d4dfd9;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.usage-table th {background:#eef3ef;color:#435950}
+.usage-table :is(th,td):first-child {text-align:left}
+@media(max-width:600px){.usage-grid{grid-template-columns:repeat(2,minmax(0,1fr));padding:16px}}
 </style><script src="/viewer.js" defer></script></head><body><header><a href="/">BT Code Review</a></header><main>
 {{if .Selected}}{{with .Selected}}
 <a href="/repo?path={{.Repo}}">← 仓库会话</a>
@@ -13,18 +27,36 @@ input,select,button{font:inherit}button{cursor:pointer}label,button,select{margi
 <p class="meta">{{stamp .Started}} · {{.Mode}} / {{.Model}} · {{.Status}}{{with .Duration}} · 耗时 {{.}}{{end}}</p>
 <p>{{with .Branch}}分支 {{.}} · {{end}}{{.ReviewMode}} {{with .From}}{{.}} → {{end}}{{.Revision}}</p>
 {{with .Coverage}}<h2>审核覆盖</h2><p>选中 {{len $.Selected.Files}} · 完成 {{index . "complete"}} · 失败 {{index . "failed"}} · 进行中 {{index . "running"}} · 待审核 {{index . "pending"}}</p>{{end}}
-{{with .Usage}}{{if .Requests}}<section><h2>Token 用量</h2><p>{{template "usage" .}}{{if .Failures}} · 请求失败 {{.Failures}} 次{{end}}</p>
-<details><summary>按文件查看用量</summary><div data-page="20">{{range $.Selected.Files}}<p>{{.Path}} · {{with .Usage}}{{template "usage" .}}{{end}}</p>{{end}}</div></details></section>{{end}}{{end}}
+{{with .Usage}}{{if .Requests}}<section aria-labelledby="usage-title"><h2 id="usage-title">Token 用量</h2>
+<dl class="usage-grid">
+  {{if .Reported}}
+  <div><dt>输入 token</dt><dd>{{template "quantity" .Input}}</dd></div>
+  <div><dt>输出 token</dt><dd>{{template "quantity" .Output}}</dd></div>
+  <div><dt>总消耗</dt><dd>{{template "quantity" .Total}}</dd></div>
+  {{end}}
+  <div><dt>模型请求</dt><dd>{{.Requests}}</dd></div>
+  {{$cache := or .Cached .CacheWrite}}
+  {{if $cache}}<div><dt>缓存读取</dt><dd>{{template "quantity" .Cached}}</dd></div>
+  <div><dt>缓存写入</dt><dd>{{template "quantity" .CacheWrite}}</dd></div>{{end}}
+  {{if .Failures}}<div><dt>失败请求</dt><dd class="failed">{{.Failures}}</dd></div>{{end}}
+</dl>
+{{if lt .Reported .Requests}}<p class="meta">{{.Reported}}/{{.Requests}} 次请求返回用量</p>{{end}}
+<details class="usage-detail"><summary>按文件查看用量（{{len $.Selected.Files}}）</summary>
+<div class="usage-table" role="region" aria-label="按文件查看用量" tabindex="0"><table>
+<thead><tr><th>文件</th><th>模型请求</th><th>输入</th><th>输出</th>{{if $cache}}<th>缓存读取</th><th>缓存写入</th>{{end}}<th>总消耗</th></tr></thead>
+<tbody data-page="20">{{range $.Selected.Files}}<tr><td>{{.Path}}</td>{{with .Usage}}<td>{{.Requests}}{{if lt .Reported .Requests}}（{{.Reported}} 次返回用量）{{end}}</td>
+{{if .Reported}}<td>{{template "quantity" .Input}}</td><td>{{template "quantity" .Output}}</td>{{if $cache}}<td>{{template "quantity" .Cached}}</td><td>{{template "quantity" .CacheWrite}}</td>{{end}}<td>{{template "quantity" .Total}}</td>
+{{else}}<td colspan="{{if $cache}}5{{else}}3{{end}}">暂无用量</td>{{end}}{{end}}</tr>{{end}}</tbody>
+</table></div></details></section>{{end}}{{end}}
 {{if index .Coverage "findings"}}
 <section><h2>审核意见（{{index .Coverage "findings"}}）</h2>
 <label>严重程度 <select id="severity"><option value="">全部</option></select></label>
 <label>类别 <select id="category"><option value="">全部</option></select></label>
-<label><input type="checkbox" id="hide-marked" checked>隐藏已标记</label><button id="clear-marks">清除全部标记</button> <span id="mark-count" aria-live="polite"></span>
 <div data-page="20" id="findings">
-{{range $i,$f := .Files}}{{range $j,$v := .Findings}}
-<article class="issue" data-mark="{{$i}}-{{$j}}" data-severity="{{.Severity}}" data-category="{{.Category}}">
+{{range $f := .Files}}{{range .Findings}}
+<article class="issue" data-severity="{{.Severity}}" data-category="{{.Category}}">
 <b>{{$f.Path}} · 第 {{.Line}} 行 · {{.Severity}} {{.Category}}</b><p>{{.Message}}</p>{{template "code" .}}
-<button data-value="fixed">已修复</button><button data-value="ignored">已忽略</button><button data-value="">清除</button> <span data-state></span></article>
+</article>
 {{end}}{{end}}</div></section>{{end}}
 <h2>文件与审核对话（{{len .Files}}）</h2>
 <div data-page="20">{{range .Files}}<article><h3>{{.Path}}</h3><p class="meta">{{.Status}} · {{len .Findings}} 条审核意见</p>{{if .Error}}<p class="failed">{{.Error}}</p>{{end}}
@@ -51,3 +83,5 @@ input,select,button{font:inherit}button{cursor:pointer}label,button,select{margi
 {{else}}<p>暂无审核记录。在 Git 仓库运行 <code>btcr review</code> 后刷新此页。</p>{{end}}{{end}}
 </main></body></html>
 {{define "code"}}{{with .ExistingCode}}<h4>现有代码</h4><pre>{{.}}</pre>{{end}}{{with .Suggestion}}<h4>建议代码</h4><pre>{{.}}</pre>{{end}}{{end}}
+
+{{define "quantity"}}<span title="{{.}}">{{number .}}</span>{{end}}

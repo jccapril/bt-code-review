@@ -156,7 +156,7 @@ func TestReviewAndViewer(t *testing.T) {
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
 		if path != "/" {
-			for _, want := range []string{"模型请求 2 次 · 输入 40 · 输出 10 · 合计 50 token", "请求参数", "工具响应", "错误响应", "missing.swift", "let orders: [String] = []", "模型请求 2", "&lt;script&gt;"} {
+			for _, want := range []string{`<dt>总消耗</dt><dd><span title="50">50</span></dd>`, `<dt>输入 token</dt><dd><span title="40">40</span></dd>`, `<dt>输出 token</dt><dd><span title="10">10</span></dd>`, "请求参数", "工具响应", "错误响应", "missing.swift", "let orders: [String] = []", "模型请求 2", "&lt;script&gt;"} {
 				if !strings.Contains(w.Body.String(), want) {
 					t.Errorf("viewer missing %q", want)
 				}
