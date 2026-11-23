@@ -1,0 +1,33 @@
+{
+  "name": "bt-code-review",
+  "version": "0.1.4",
+  "description": "Local code review agent and browser viewer",
+  "license": "Apache-2.0",
+  "bin": {
+    "btcr": "bin/btcr.cjs"
+  },
+  "files": [
+    "bin/btcr.cjs",
+    "dist/",
+    "LICENSE"
+  ],
+  "scripts": {
+    "prepack": "node scripts/build.cjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jccapril/bt-code-review.git"
+  }
+}

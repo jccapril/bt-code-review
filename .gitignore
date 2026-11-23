@@ -1,0 +1,13 @@
+/dist/
+/btcr
+/*.tgz
+/node_modules/
+/btcr.exe
+*.test
+coverage.out
+npm-debug.log*
+.DS_Store
+.btcr/
+.env
+.env.*
+!.env.example
