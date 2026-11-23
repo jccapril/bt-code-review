@@ -17,16 +17,18 @@ import (
 	"bt-code-review/internal/chatgptauth"
 )
 
-const version = "0.1.4"
+const version = "0.1.5"
 
 const help = `btcr - local AI code review
 
+  btcr config provider
   btcr config api [--model NAME] [--base-url URL] [--api-key-stdin]
+  btcr config responses [--model NAME] [--base-url URL] [--api-key-stdin]
   btcr config chatgpt [--model NAME]
   btcr config set language NAME
   btcr rules check [--repo DIR] [--rule FILE] PATH
   btcr config show
-  btcr models [--list]
+  btcr config model [--list]
   btcr login [--no-browser] [--enable-plan] [--account ID]
   btcr logout
   btcr review [--repo DIR] [--commit REF | --from REF [--to REF]]
@@ -88,17 +90,18 @@ func loadConfig(dir string) (config, error) {
 		return c, e
 	}
 	if c.Mode == "" {
-		return c, errors.New("configure a provider with btcr config api or btcr config chatgpt")
+		return c, errors.New("configure a provider with btcr config provider")
 	}
 	return c, c.validate()
 }
+func (c config) usesAPIKey() bool { return c.Mode == "api" || c.Mode == "responses" }
 func (c config) validate() error {
 	switch c.Mode {
 	case "chatgpt":
 		if c.BaseURL != "" || c.APIKey != "" {
 			return errors.New("ChatGPT mode uses its own endpoint and browser credentials")
 		}
-	case "api":
+	case "api", "responses":
 		u, e := url.Parse(c.BaseURL)
 		if e != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "https" && !(u.Scheme == "http" && (u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1"))) {
 			return errors.New("use an HTTPS API base URL or loopback HTTP URL")
@@ -119,7 +122,7 @@ func parse(f *flag.FlagSet, args []string) error {
 }
 func configure(dir string, args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: btcr config api|chatgpt|show")
+		return errors.New("usage: btcr config provider|model|api|responses|chatgpt|set|show")
 	}
 	old, e := readSettings(dir)
 	if e != nil {
@@ -146,7 +149,7 @@ func configure(dir string, args []string) error {
 	f := flag.NewFlagSet("config", flag.ContinueOnError)
 	f.StringVar(&c.Model, "model", "", "model identifier")
 	var stdin bool
-	if c.Mode == "api" {
+	if c.usesAPIKey() {
 		f.StringVar(&c.BaseURL, "base-url", "https://api.openai.com/v1", "OpenAI-compatible API base URL")
 		f.BoolVar(&stdin, "api-key-stdin", false, "read and save API key from stdin")
 	}
@@ -165,8 +168,8 @@ func configure(dir string, args []string) error {
 		if c.APIKey == "" {
 			return errors.New("empty API key")
 		}
-	} else if c.Mode == "api" {
-		if old.Mode == "api" && old.BaseURL == c.BaseURL {
+	} else if c.usesAPIKey() {
+		if old.usesAPIKey() && old.BaseURL == c.BaseURL {
 			c.APIKey = old.APIKey
 		}
 	}
@@ -190,8 +193,14 @@ func run(ctx context.Context, args []string) error {
 	case "rules":
 		return checkRules(ctx, args[1:])
 	case "models":
-		return chooseModel(ctx, dir, args[1:], os.Stdin, os.Stdout)
+		return chooseModel(ctx, dir, args[1:], os.Stdin, os.Stdout, false)
 	case "config":
+		if len(args) >= 2 && args[1] == "model" {
+			return chooseModel(ctx, dir, args[2:], os.Stdin, os.Stdout, true)
+		}
+		if len(args) >= 2 && args[1] == "provider" {
+			return providerWizard(ctx, dir, args[2:])
+		}
 		return configure(dir, args[1:])
 	case "login":
 		f := flag.NewFlagSet("login", flag.ContinueOnError)

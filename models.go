@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"bt-code-review/internal/chatgptauth"
+	surveyterm "github.com/AlecAivazis/survey/v2/terminal"
 )
 
 func (m *modelClient) catalog(ctx context.Context) ([]chatgptauth.Model, error) {
@@ -37,7 +38,7 @@ func (m *modelClient) catalog(ctx context.Context) ([]chatgptauth.Model, error) 
 	}
 	defer res.Body.Close()
 	if res.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("API model catalog returned %s; use btcr config api --model NAME if your endpoint has no catalog", res.Status)
+		return nil, fmt.Errorf("API model catalog returned %s; use btcr config %s --model NAME if your endpoint has no catalog", res.Status, m.cfg.Mode)
 	}
 	var catalog struct{ Data []struct{ ID string } }
 	if e = json.NewDecoder(res.Body).Decode(&catalog); e != nil {
@@ -57,8 +58,8 @@ func (m *modelClient) catalog(ctx context.Context) ([]chatgptauth.Model, error) 
 	return models, nil
 }
 
-func chooseModel(ctx context.Context, dir string, args []string, in io.Reader, out io.Writer) error {
-	flags := flag.NewFlagSet("models", flag.ContinueOnError)
+func chooseModel(ctx context.Context, dir string, args []string, in io.Reader, out io.Writer, arrows bool) error {
+	flags := flag.NewFlagSet("config model", flag.ContinueOnError)
 	list := flags.Bool("list", false, "display the account catalog without choosing")
 	if e := parse(flags, args); e != nil {
 		return e
@@ -77,6 +78,16 @@ func chooseModel(ctx context.Context, dir string, args []string, in io.Reader, o
 	}
 	if len(models) == 0 {
 		return errors.New("no models listed for this account")
+	}
+	if arrows && !*list {
+		cfg.Model, e = pickModel(models, cfg.Model, askTerminal)
+		if errors.Is(e, surveyterm.InterruptErr) {
+			return nil
+		}
+		if e != nil {
+			return e
+		}
+		return saveSelectedModel(dir, cfg, out)
 	}
 	for i, m := range models {
 		label := strconv.QuoteToGraphic(m.Slug)
@@ -109,10 +120,14 @@ func chooseModel(ctx context.Context, dir string, args []string, in io.Reader, o
 			continue
 		}
 		cfg.Model = models[n-1].Slug
-		if e = saveJSON(filepath.Join(dir, "config.json"), cfg); e != nil {
-			return e
-		}
-		fmt.Fprintf(out, "Selected %q.\n", cfg.Model)
-		return nil
+		return saveSelectedModel(dir, cfg, out)
 	}
+}
+
+func saveSelectedModel(dir string, cfg config, out io.Writer) error {
+	if err := saveJSON(filepath.Join(dir, "config.json"), cfg); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "Selected %q.\n", cfg.Model)
+	return nil
 }

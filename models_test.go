@@ -31,7 +31,7 @@ func TestChooseAPIModel(t *testing.T) {
 		input, expected string
 	}{{[]string{"--list"}, "2\n", ""}, {nil, "\n", ""}, {nil, "9\n2\n", "model-b"}} {
 		var out bytes.Buffer
-		if err := chooseModel(context.Background(), dir, tc.args, strings.NewReader(tc.input), &out); err != nil {
+		if err := chooseModel(context.Background(), dir, tc.args, strings.NewReader(tc.input), &out, false); err != nil {
 			t.Fatal(err)
 		}
 		got, err := loadConfig(dir)

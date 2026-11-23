@@ -38,7 +38,7 @@ type modelClient struct {
 
 func providerClient(dir string, c config) (*modelClient, error) {
 	m := &modelClient{cfg: c, http: &http.Client{Timeout: 3 * time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
-	if c.Mode == "api" {
+	if c.usesAPIKey() {
 		for _, s := range []string{os.Getenv("BTCR_API_KEY"), os.Getenv("OPENAI_API_KEY"), c.APIKey} {
 			if s != "" {
 				m.apiKey = s
@@ -59,8 +59,8 @@ func newModel(ctx context.Context, dir string, c config) (*modelClient, error) {
 	if c.Model != "" {
 		return m, nil
 	}
-	if c.Mode == "api" {
-		return nil, errors.New("select an API model with btcr models")
+	if c.usesAPIKey() {
+		return nil, errors.New("select an API model with btcr config model")
 	}
 	models, e := m.catalog(ctx)
 	if e != nil {
@@ -94,17 +94,21 @@ func (m *modelClient) next(ctx context.Context, h *conversation) ([]call, error)
 		body = object{"model": m.cfg.Model, "messages": append([]any{object{"role": "system", "content": h.instructions}}, h.messages...), "tools": chatTools}
 		url = strings.TrimSuffix(m.cfg.BaseURL, "/") + "/chat/completions"
 	} else {
-		a, e := m.auth.Credentials(ctx, m.store, "")
-		if e != nil {
-			return nil, e
-		}
-		token = a.AccessToken
-		url = chatgptauth.Resource + "/responses"
+		url = strings.TrimRight(m.cfg.BaseURL, "/") + "/responses"
 		for _, d := range defs {
 			d["type"] = "function"
 			d["strict"] = false
 		}
-		body = object{"model": m.cfg.Model, "instructions": h.instructions, "input": h.messages, "store": false, "stream": true, "include": []string{"reasoning.encrypted_content"}, "tools": []object{{"type": "namespace", "name": "btcr", "description": "Local code review tools", "tools": defs}}}
+		body = object{"model": m.cfg.Model, "instructions": h.instructions, "input": h.messages, "store": false, "stream": true, "include": []string{"reasoning.encrypted_content"}, "tools": defs}
+		if m.cfg.Mode == "chatgpt" {
+			a, err := m.auth.Credentials(ctx, m.store, "")
+			if err != nil {
+				return nil, err
+			}
+			token = a.AccessToken
+			url = chatgptauth.Resource + "/responses"
+			body["tools"] = []object{{"type": "namespace", "name": "btcr", "description": "Local code review tools", "tools": defs}}
+		}
 	}
 	b, e := json.Marshal(body)
 	if e != nil {
@@ -124,7 +128,7 @@ func (m *modelClient) next(ctx context.Context, h *conversation) ([]call, error)
 	if resp.StatusCode/100 != 2 {
 		return nil, fmt.Errorf("model endpoint returned %s", resp.Status)
 	}
-	if m.cfg.Mode == "chatgpt" {
+	if m.cfg.Mode != "api" {
 		calls, err := responsesTurn(resp.Body, h)
 		if err == nil {
 			m.usage.add(h.lastUsage)
@@ -192,22 +196,22 @@ func responsesTurn(reader io.Reader, h *conversation) ([]call, error) {
 		}
 		switch ev.Type {
 		case "error", "response.failed", "response.incomplete":
-			return false, nil, fmt.Errorf("subscription stream: %s", ev.Type)
+			return false, nil, fmt.Errorf("Responses stream: %s", ev.Type)
 		case "response.output_item.done":
 			itemBytes += len(ev.Item) + 64
 			if itemBytes > 16<<20 {
-				return false, nil, errors.New("subscription output exceeds 16 MiB")
+				return false, nil, errors.New("Responses output exceeds 16 MiB")
 			}
 			items[ev.Index] = ev.Item
 		case "response.completed":
 			if ev.Response.Status != "completed" {
-				return false, nil, errors.New("subscription response did not complete")
+				return false, nil, errors.New("Responses response did not complete")
 			}
 			if len(ev.Response.Output) == 0 {
 				for i := 0; i < len(items); i++ {
 					item, ok := items[i]
 					if !ok {
-						return false, nil, errors.New("subscription response missing output item")
+						return false, nil, errors.New("Responses response missing output item")
 					}
 					ev.Response.Output = append(ev.Response.Output, item)
 				}
@@ -249,7 +253,7 @@ func responsesTurn(reader io.Reader, h *conversation) ([]call, error) {
 	if ok, c, e := decode(); ok || e != nil {
 		return c, e
 	}
-	return nil, errors.New("subscription stream ended before response.completed")
+	return nil, errors.New("Responses stream ended before response.completed")
 }
 func (m *modelClient) addResult(h *conversation, id, result string) {
 	if m.cfg.Mode == "api" {

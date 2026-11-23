@@ -1,6 +1,6 @@
 {
   "name": "bt-code-review",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Local code review agent and browser viewer",
   "license": "Apache-2.0",
   "bin": {
