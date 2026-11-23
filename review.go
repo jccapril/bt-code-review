@@ -17,9 +17,17 @@ import (
 )
 
 type Finding struct {
-	Line     int    `json:"line"`
-	Severity string `json:"severity"`
-	Message  string `json:"message"`
+	Category     string `json:"category,omitempty"`
+	ExistingCode string `json:"existing_code,omitempty"`
+	Suggestion   string `json:"suggestion,omitempty"`
+	Line         int    `json:"line"`
+	Severity     string `json:"severity"`
+	Message      string `json:"message"`
+}
+type RequestRecord struct {
+	Usage                             *tokenUsage `json:",omitempty"`
+	Model, Response, Reasoning, Error string      `json:",omitempty"`
+	DurationMS                        int64
 }
 type ToolRecord struct {
 	Request    int
@@ -32,6 +40,7 @@ type ToolRecord struct {
 	DurationMS int64
 }
 type FileReport struct {
+	Requests  []RequestRecord `json:",omitempty"`
 	Path      string
 	Diff      string
 	Status    string
@@ -42,8 +51,54 @@ type FileReport struct {
 }
 type Report struct {
 	ID, Repo, Revision, Mode, Model, Status string
+	Branch, ReviewMode, From                string     `json:",omitempty"`
+	Finished                                *time.Time `json:",omitempty"`
 	Started                                 time.Time
 	Files                                   []FileReport
+}
+
+type tokenUsage struct {
+	Input      int64
+	Output     int64
+	CacheWrite int64 `json:",omitempty"`
+	Cached     int64 `json:",omitempty"`
+	Total      int64
+}
+
+type usageSummary struct {
+	tokenUsage
+	Requests, Reported, Failures int
+}
+
+func (s *usageSummary) addFile(f FileReport) {
+	s.Requests += len(f.Requests)
+	for _, req := range f.Requests {
+		if req.Error != "" {
+			s.Failures++
+		}
+		u := req.Usage
+		if u == nil {
+			continue
+		}
+		s.Reported++
+		s.Input += u.Input
+		s.Output += u.Output
+		s.Cached += u.Cached
+		s.CacheWrite += u.CacheWrite
+		s.Total += u.Total
+	}
+}
+
+func (f FileReport) Usage() (s usageSummary) {
+	s.addFile(f)
+	return
+}
+
+func (r Report) Usage() (s usageSummary) {
+	for _, f := range r.Files {
+		s.addFile(f)
+	}
+	return
 }
 
 func definition(name, desc string, props object, required ...string) object {
@@ -60,7 +115,7 @@ func toolDefinitions() []object {
 		definition("code_search", "Search source lines for a literal substring. Optionally restrict to a path.", object{"query": str, "path": str}, "query"),
 		definition("file_read", "Read numbered lines from a reviewable source file. Lines are one-based.", object{"path": str, "start": num, "end": num}, "path"),
 		definition("file_read_diff", "Read the current review diff for a file.", object{"path": str}, "path"),
-		definition("code_comment", "Report a confirmed defect in the current file, anchored on an added line.", object{"line": num, "severity": object{"type": "string", "enum": []string{"low", "medium", "high", "critical"}}, "message": str}, "line", "severity", "message"),
+		definition("code_comment", "Report a confirmed defect in the current file, anchored on an added line.", object{"existing_code": str, "suggestion": str, "category": object{"type": "string", "enum": []string{"bug", "security", "performance", "maintainability", "test", "style", "documentation", "other"}}, "line": num, "severity": object{"type": "string", "enum": []string{"low", "medium", "high", "critical"}}, "message": str}, "line", "severity", "message"),
 		definition("task_done", "Finish reviewing the current file.", object{}),
 	}
 }
@@ -77,6 +132,8 @@ func clip(s string) string {
 }
 func execute(ctx context.Context, r *repository, c change, fr *FileReport, fn function) (string, bool, error) {
 	var a struct {
+		ExistingCode                   string `json:"existing_code"`
+		Suggestion, Category           string
 		Path, Query, Message, Severity string
 		Line, Start, End               int
 	}
@@ -95,9 +152,9 @@ func execute(ctx context.Context, r *repository, c change, fr *FileReport, fn fu
 		default:
 			return "", false, errors.New("Invalid severity.")
 		}
-		f := Finding{a.Line, a.Severity, a.Message}
+		f := Finding{Line: a.Line, Severity: a.Severity, Message: a.Message, Category: a.Category, ExistingCode: a.ExistingCode, Suggestion: a.Suggestion}
 		for _, old := range fr.Findings {
-			if old == f {
+			if old.Line == f.Line && old.Severity == f.Severity && old.Message == f.Message {
 				return "Already recorded.", false, nil
 			}
 		}
@@ -179,11 +236,21 @@ func reviewFile(ctx context.Context, r *repository, c change, m *modelClient, ba
 	h := conversation{instructions: reviewInstructions(r.rules.Resolve(c.Path), m.cfg.Language), messages: []any{object{"role": "user", "content": fmt.Sprintf("Background: %s\nReview file: %s\nUnified diff:\n%s", background, c.Path, c.Diff)}}}
 	for round := 0; round < 24; round++ {
 		progress.log("Model request %d/24", round+1)
+		started := time.Now()
 		calls, e := m.next(ctx, &h)
+		record := h.last
+		record.DurationMS = time.Since(started).Milliseconds()
+		if e != nil {
+			record.Error = e.Error()
+		}
+		fr.Requests = append(fr.Requests, record)
 		if e != nil {
 			return e
 		}
 		if len(calls) == 0 {
+			if err := checkpoint(); err != nil {
+				return err
+			}
 			h.messages = append(h.messages, object{"role": "user", "content": "Use the available review tools. Finish with task_done."})
 			continue
 		}
@@ -265,6 +332,16 @@ func review(ctx context.Context, dir string, args []string) error {
 		return e
 	}
 	report := Report{ID: uuid.NewString(), Repo: r.dir, Revision: r.ref, Mode: cfg.Mode, Model: m.cfg.Model, Status: "running", Started: time.Now()}
+	branch, _ := git(ctx, r.dir, "branch", "--show-current")
+	report.Branch = strings.TrimSpace(branch)
+	report.ReviewMode = "worktree"
+	if *commit != "" {
+		report.ReviewMode = "commit"
+	}
+	if *from != "" {
+		report.ReviewMode = "range"
+		report.From = *from
+	}
 	for _, c := range r.changes {
 		report.Files = append(report.Files, FileReport{Path: c.Path, Diff: c.Diff, Status: "pending", Findings: []Finding{}})
 	}
@@ -298,6 +375,8 @@ func review(ctx context.Context, dir string, args []string) error {
 			break
 		}
 	}
+	finished := time.Now()
+	report.Finished = &finished
 	report.Status = "complete"
 	if failure != nil {
 		report.Status = "incomplete"
@@ -305,7 +384,7 @@ func review(ctx context.Context, dir string, args []string) error {
 	if e = checkpoint(); e != nil {
 		return e
 	}
-	progress.log("Summary: %d/%d file(s) completed, %d comment(s)%s, %s elapsed", completed, len(report.Files), count, m.usage.String(), elapsed(time.Since(report.Started)))
+	progress.log("Summary: %d/%d file(s) completed, %d comment(s)%s, %s elapsed", completed, len(report.Files), count, report.Usage().String(), elapsed(time.Since(report.Started)))
 	progress.log("Session: %s", report.ID)
 	if *format == "json" {
 		if e = json.NewEncoder(os.Stdout).Encode(report); e != nil {

@@ -16,7 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
+
 	"strings"
 	"time"
 
@@ -25,6 +25,10 @@ import (
 
 //go:embed viewer.html
 var viewerHTML string
+
+//go:embed viewer.js
+var viewerJS string
+
 var reportPage = template.Must(template.New("page").Funcs(template.FuncMap{"prettyArgs": func(raw string) string {
 	var b bytes.Buffer
 	if err := json.Indent(&b, []byte(raw), "", "  "); err != nil {
@@ -44,7 +48,9 @@ var reportPage = template.Must(template.New("page").Funcs(template.FuncMap{"pret
 }}).Parse(viewerHTML))
 
 type pageData struct {
-	Sessions []Report
+	Repos    []repoRow
+	Repo     *repoRow
+	Compare  *comparison
 	Selected *Report
 }
 
@@ -66,11 +72,17 @@ func reportHandler(dir, host string) http.Handler {
 			http.Error(w, "Method not allowed", 405)
 			return
 		}
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")
 		var data pageData
-		if r.URL.Path == "/" {
+		if r.URL.Path == "/viewer.js" {
+			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+			fmt.Fprint(w, viewerJS)
+			return
+		}
+		if r.URL.Path == "/" || r.URL.Path == "/repo" {
+			var rows []sessionRow
 			entries, e := os.ReadDir(dir)
 			if e != nil && !errors.Is(e, os.ErrNotExist) {
 				http.Error(w, "Cannot read sessions", 500)
@@ -85,27 +97,63 @@ func reportHandler(dir, host string) http.Handler {
 					http.Error(w, "Cannot read review report", 500)
 					return
 				}
-				s.Files = nil
-				data.Sessions = append(data.Sessions, s)
+				rows = append(rows, sessionRow{ID: s.ID, Repo: s.Repo, Branch: s.Branch, Mode: s.ReviewMode, Model: s.Model, Status: s.Status, Duration: s.Duration(), Started: s.Started, Files: len(s.Files), Findings: s.Coverage()["findings"]})
 			}
-			sort.Slice(data.Sessions, func(i, j int) bool { return data.Sessions[i].Started.After(data.Sessions[j].Started) })
+			data.Repos = history(rows)
+			if r.URL.Path == "/repo" {
+				for i := range data.Repos {
+					if data.Repos[i].Path == r.URL.Query().Get("path") {
+						data.Repo = &data.Repos[i]
+						break
+					}
+				}
+				if data.Repo == nil {
+					http.NotFound(w, r)
+					return
+				}
+			}
 		} else {
-			id, ok := strings.CutPrefix(r.URL.Path, "/sessions/")
-			parsed, e := uuid.Parse(id)
-			if !ok || e != nil || parsed.String() != id {
+			read := func(id string) *Report {
+				parsed, err := uuid.Parse(id)
+				if err != nil || parsed.String() != id {
+					http.NotFound(w, r)
+					return nil
+				}
+				report, err := loadReport(filepath.Join(dir, id+".json"))
+				if errors.Is(err, os.ErrNotExist) {
+					http.NotFound(w, r)
+					return nil
+				}
+				if err != nil {
+					http.Error(w, "Cannot read review report", 500)
+					return nil
+				}
+				return &report
+			}
+			if r.URL.Path == "/compare" {
+				before := read(r.URL.Query().Get("before"))
+				if before == nil {
+					return
+				}
+				after := read(r.URL.Query().Get("after"))
+				if after == nil {
+					return
+				}
+				if before.Repo != after.Repo {
+					http.Error(w, "Different repositories", 400)
+					return
+				}
+				result := compareReports(*before, *after)
+				data.Compare = &result
+			} else if id, ok := strings.CutPrefix(r.URL.Path, "/sessions/"); ok {
+				data.Selected = read(id)
+				if data.Selected == nil {
+					return
+				}
+			} else {
 				http.NotFound(w, r)
 				return
 			}
-			report, e := loadReport(filepath.Join(dir, id+".json"))
-			if errors.Is(e, os.ErrNotExist) {
-				http.NotFound(w, r)
-				return
-			}
-			if e != nil {
-				http.Error(w, "Cannot read review report", 500)
-				return
-			}
-			data.Selected = &report
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if e := reportPage.Execute(w, data); e != nil {

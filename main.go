@@ -17,7 +17,7 @@ import (
 	"bt-code-review/internal/chatgptauth"
 )
 
-const version = "0.1.5"
+const version = "0.1.6"
 
 const help = `btcr - local AI code review
 

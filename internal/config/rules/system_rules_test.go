@@ -378,12 +378,12 @@ func TestNewResolver_ProjectFileMissing(t *testing.T) {
 func TestNewResolver_ProjectRuleHighestPriority(t *testing.T) {
 	setTestHome(t, t.TempDir())
 	dir := t.TempDir()
-	ocrDir := filepath.Join(dir, ".opencodereview")
-	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+	ruleDir := filepath.Join(dir, ".btcodereview")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	ruleJSON := `{"rules":[{"path":"force-api/**/*.java","rule":"project-java-rule"}]}`
-	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ruleDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
 		t.Fatalf("write rule.json: %v", err)
 	}
 
@@ -413,18 +413,18 @@ func TestNewResolver_ProjectRuleFirstMatchWinsWithinFile(t *testing.T) {
 	setTestHome(t, t.TempDir())
 
 	// Project rule file:
-	//   <repo>/.opencodereview/rule.json
+	//   <repo>/.btcodereview/rule.json
 	// Path under test:
 	//   internal/config/rules/system_rules.go -> matches both project entries.
 	// This verifies declaration order inside one JSON rule file: the first
 	// matching entry wins even when a later entry is more specific.
 	dir := t.TempDir()
-	ocrDir := filepath.Join(dir, ".opencodereview")
-	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+	ruleDir := filepath.Join(dir, ".btcodereview")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	ruleJSON := `{"rules":[{"path":"internal/**/*.go","rule":"first-go-rule"},{"path":"internal/config/**/*.go","rule":"second-config-rule"}]}`
-	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ruleDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
 		t.Fatalf("write rule.json: %v", err)
 	}
 
@@ -441,12 +441,12 @@ func TestNewResolver_ProjectRuleFirstMatchWinsWithinFile(t *testing.T) {
 
 func TestNewResolver_ProjectRuleFallsBackToSystem(t *testing.T) {
 	dir := t.TempDir()
-	ocrDir := filepath.Join(dir, ".opencodereview")
-	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+	ruleDir := filepath.Join(dir, ".btcodereview")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	ruleJSON := `{"rules":[{"path":"special/**/*.go","rule":"special-go-rule"}]}`
-	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ruleDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
 		t.Fatalf("write rule.json: %v", err)
 	}
 
@@ -489,12 +489,12 @@ func TestNewResolver_EmptyRuleSkippedAndFallsBack(t *testing.T) {
 	setTestHome(t, t.TempDir())
 
 	dir := t.TempDir()
-	ocrDir := filepath.Join(dir, ".opencodereview")
-	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+	ruleDir := filepath.Join(dir, ".btcodereview")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	ruleJSON := `{"rules":[{"path":"**/*.go","rule":""},{"path":"internal/**/*.go","rule":"second-rule"}]}`
-	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ruleDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
 		t.Fatalf("write rule.json: %v", err)
 	}
 
@@ -522,12 +522,12 @@ func TestNewResolver_EmptyRuleMergeSystemRuleReturnsSystemOnly(t *testing.T) {
 	setTestHome(t, t.TempDir())
 
 	dir := t.TempDir()
-	ocrDir := filepath.Join(dir, ".opencodereview")
-	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+	ruleDir := filepath.Join(dir, ".btcodereview")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	ruleJSON := `{"rules":[{"path":"**/*.go","rule":"","merge_system_rule":true}]}`
-	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ruleDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
 		t.Fatalf("write rule.json: %v", err)
 	}
 
@@ -555,18 +555,18 @@ func TestNewResolver_ProjectRuleReplacesSystemRuleByDefault(t *testing.T) {
 	setTestHome(t, t.TempDir())
 
 	// Project rule file:
-	//   <repo>/.opencodereview/rule.json
+	//   <repo>/.btcodereview/rule.json
 	// Path under test:
 	//   main.go -> matches the project **/*.go rule.
 	// This verifies the default behavior: a user rule replaces the system rule
 	// unless the matched rule entry opts into merge_system_rule.
 	dir := t.TempDir()
-	ocrDir := filepath.Join(dir, ".opencodereview")
-	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+	ruleDir := filepath.Join(dir, ".btcodereview")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	ruleJSON := `{"rules":[{"path":"**/*.go","rule":"project-go-rule"}]}`
-	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ruleDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
 		t.Fatalf("write rule.json: %v", err)
 	}
 
@@ -585,18 +585,18 @@ func TestNewResolver_ProjectRuleMergesSystemRule(t *testing.T) {
 	setTestHome(t, t.TempDir())
 
 	// Project rule file:
-	//   <repo>/.opencodereview/rule.json
+	//   <repo>/.btcodereview/rule.json
 	// Path under test:
 	//   main.go -> matches both the system Go rule and the project **/*.go rule.
 	// This verifies merge_system_rule keeps both rules without depending on the
 	// exact merge markdown or ordering.
 	dir := t.TempDir()
-	ocrDir := filepath.Join(dir, ".opencodereview")
-	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+	ruleDir := filepath.Join(dir, ".btcodereview")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	ruleJSON := `{"rules":[{"path":"**/*.go","rule":"project-go-rule","merge_system_rule":true}]}`
-	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ruleDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
 		t.Fatalf("write rule.json: %v", err)
 	}
 
@@ -627,19 +627,19 @@ func TestNewResolver_MergeSystemRuleKeepsRulePriority(t *testing.T) {
 	setTestHome(t, t.TempDir())
 
 	// Project rule file:
-	//   <repo>/.opencodereview/rule.json
+	//   <repo>/.btcodereview/rule.json
 	// Custom rule file:
 	//   <custom>/custom_rules.json, passed as --rule equivalent.
 	// Path under test:
 	//   main.go -> matches custom main.go first, then project **/*.go.
 	// This verifies merging does not change layer priority: custom still wins.
 	repoDir := t.TempDir()
-	ocrDir := filepath.Join(repoDir, ".opencodereview")
-	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+	ruleDir := filepath.Join(repoDir, ".btcodereview")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	projectRule := `{"rules":[{"path":"**/*.go","rule":"project-go-rule"}]}`
-	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(projectRule), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ruleDir, "rule.json"), []byte(projectRule), 0o644); err != nil {
 		t.Fatalf("write rule.json: %v", err)
 	}
 
@@ -684,12 +684,12 @@ func TestNewResolver_CustomOverridesProject(t *testing.T) {
 
 	// Setup project rule with narrower pattern
 	repoDir := t.TempDir()
-	ocrDir := filepath.Join(repoDir, ".opencodereview")
-	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+	ruleDir := filepath.Join(repoDir, ".btcodereview")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	projRule := `{"rules":[{"path":"force-api/**/*.java","rule":"project-java-rule"},{"path":"**/*.go","rule":"project-go-rule"}]}`
-	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(projRule), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ruleDir, "rule.json"), []byte(projRule), 0o644); err != nil {
 		t.Fatalf("write rule.json: %v", err)
 	}
 
@@ -719,11 +719,11 @@ func TestNewResolver_CustomOverridesProject(t *testing.T) {
 
 func TestNewResolver_ProjectFileMalformed(t *testing.T) {
 	dir := t.TempDir()
-	ocrDir := filepath.Join(dir, ".opencodereview")
-	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+	ruleDir := filepath.Join(dir, ".btcodereview")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte("{invalid json"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ruleDir, "rule.json"), []byte("{invalid json"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -816,12 +816,12 @@ func TestFileFilter_CaseInsensitive(t *testing.T) {
 
 func TestNewResolver_FileFilterMerged(t *testing.T) {
 	repoDir := t.TempDir()
-	ocrDir := filepath.Join(repoDir, ".opencodereview")
-	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+	ruleDir := filepath.Join(repoDir, ".btcodereview")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	projJSON := `{"rules":[],"include":["src/**/*.java"],"exclude":["**/generated/**"]}`
-	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(projJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ruleDir, "rule.json"), []byte(projJSON), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -855,12 +855,12 @@ func TestNewResolver_FileFilterNilWhenEmpty(t *testing.T) {
 
 func TestNewResolver_FileFilterPriorityOverride(t *testing.T) {
 	repoDir := t.TempDir()
-	ocrDir := filepath.Join(repoDir, ".opencodereview")
-	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+	ruleDir := filepath.Join(repoDir, ".btcodereview")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	projJSON := `{"rules":[],"include":["src/**/*.java"],"exclude":["**/gen/**"]}`
-	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(projJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ruleDir, "rule.json"), []byte(projJSON), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -898,12 +898,12 @@ func TestNewResolver_FileFilterPriorityOverride(t *testing.T) {
 
 func TestNewResolver_FileFilterFallsToProject(t *testing.T) {
 	repoDir := t.TempDir()
-	ocrDir := filepath.Join(repoDir, ".opencodereview")
-	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+	ruleDir := filepath.Join(repoDir, ".btcodereview")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	projJSON := `{"rules":[],"include":["src/**/*.java"],"exclude":["**/gen/**"]}`
-	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(projJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ruleDir, "rule.json"), []byte(projJSON), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -1301,12 +1301,12 @@ func TestResolveDetail_SystemCUDAHIPPatternMatch(t *testing.T) {
 func TestResolveDetail_ProjectOverridesSystem(t *testing.T) {
 	setTestHome(t, t.TempDir())
 	dir := t.TempDir()
-	ocrDir := filepath.Join(dir, ".opencodereview")
-	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+	ruleDir := filepath.Join(dir, ".btcodereview")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	ruleJSON := `{"rules":[{"path":"src/**/*.java","rule":"project-java-rule"}]}`
-	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ruleDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -1338,18 +1338,18 @@ func TestResolveDetail_MergeSystemRule(t *testing.T) {
 	setTestHome(t, t.TempDir())
 
 	// Project rule file:
-	//   <repo>/.opencodereview/rule.json
+	//   <repo>/.btcodereview/rule.json
 	// Path under test:
 	//   src/main/foo.java -> matches both the system Java rule and the project rule.
 	// This verifies ResolveDetail reports the matched user rule metadata while
 	// returning merged rule text when the entry sets merge_system_rule.
 	dir := t.TempDir()
-	ocrDir := filepath.Join(dir, ".opencodereview")
-	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+	ruleDir := filepath.Join(dir, ".btcodereview")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	ruleJSON := `{"rules":[{"path":"src/**/*.java","rule":"project-java-rule","merge_system_rule":true}]}`
-	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ruleDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -1383,12 +1383,12 @@ func TestResolveDetail_MergeSystemRule(t *testing.T) {
 func TestResolveDetail_CustomOverridesAll(t *testing.T) {
 	// Project rule
 	repoDir := t.TempDir()
-	ocrDir := filepath.Join(repoDir, ".opencodereview")
-	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+	ruleDir := filepath.Join(repoDir, ".btcodereview")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	projJSON := `{"rules":[{"path":"**/*.java","rule":"project-java-rule"}]}`
-	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(projJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ruleDir, "rule.json"), []byte(projJSON), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -1417,12 +1417,12 @@ func TestResolveDetail_CustomOverridesAll(t *testing.T) {
 
 func TestNewResolver_BraceExpansionInProjectRule(t *testing.T) {
 	dir := t.TempDir()
-	ocrDir := filepath.Join(dir, ".opencodereview")
-	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+	ruleDir := filepath.Join(dir, ".btcodereview")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	ruleJSON := `{"rules":[{"path":"src/**/*.{java,kt}","rule":"jvm-rule"}]}`
-	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ruleDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -1832,11 +1832,11 @@ func TestResolveRuleEntries_EmptyRepoDirAbsolute(t *testing.T) {
 }
 
 func TestResolveRuleEntries_GlobalRuleFileResolution(t *testing.T) {
-	// Simulate loadGlobalRule: repoDir = filepath.Dir(~/.opencodereview/rule.json)
+	// Simulate loadGlobalRule: repoDir = filepath.Dir(~/.btcodereview/rule.json)
 	homeDir := t.TempDir()
 	setTestHome(t, homeDir)
 
-	globalRuleDir := filepath.Join(homeDir, ".opencodereview")
+	globalRuleDir := filepath.Join(homeDir, ".btcodereview")
 	if err := os.MkdirAll(globalRuleDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1847,7 +1847,7 @@ func TestResolveRuleEntries_GlobalRuleFileResolution(t *testing.T) {
 	entries := []ProjectRuleEntry{
 		{Path: "**/*.go", Rule: "reusable.md"},
 	}
-	// repoDir = ~/.opencodereview (where rule.json lives)
+	// repoDir = ~/.btcodereview (where rule.json lives)
 	resolveRuleEntries(entries, globalRuleDir, "")
 
 	if entries[0].Rule != "global reusable rule" {
@@ -1960,7 +1960,7 @@ func TestReadRuleFileSafe_ConfineRejectsOutside(t *testing.T) {
 }
 
 // TestLoadProjectRule_ConfinesUntrustedReferences exercises the real entry point: a
-// malicious .opencodereview/rule.json referencing an absolute path outside the repo
+// malicious .btcodereview/rule.json referencing an absolute path outside the repo
 // must not leak that file's contents into the resolved rule.
 func TestLoadProjectRule_ConfinesUntrustedReferences(t *testing.T) {
 	repoDir := t.TempDir()
@@ -1969,7 +1969,7 @@ func TestLoadProjectRule_ConfinesUntrustedReferences(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfgDir := filepath.Join(repoDir, ".opencodereview")
+	cfgDir := filepath.Join(repoDir, ".btcodereview")
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1996,7 +1996,7 @@ func TestLoadProjectRule_ConfinesUntrustedReferences(t *testing.T) {
 }
 
 // TestLoadProjectRule_RejectsSymlinkedDir verifies that an attacker-committed
-// ".opencodereview" directory symlink pointing outside the repo cannot make
+// ".btcodereview" directory symlink pointing outside the repo cannot make
 // loadProjectRule read a rule file from outside the repository.
 func TestLoadProjectRule_RejectsSymlinkedDir(t *testing.T) {
 	repoDir := t.TempDir()
@@ -2004,7 +2004,7 @@ func TestLoadProjectRule_RejectsSymlinkedDir(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(outsideDir, "rule.json"), []byte(`{"rules":[{"path":"**/*.go","rule":"OUTSIDE"}]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(outsideDir, filepath.Join(repoDir, ".opencodereview")); err != nil {
+	if err := os.Symlink(outsideDir, filepath.Join(repoDir, ".btcodereview")); err != nil {
 		t.Skipf("cannot create symlink: %v", err)
 	}
 
@@ -2013,7 +2013,7 @@ func TestLoadProjectRule_RejectsSymlinkedDir(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if pr != nil {
-		t.Errorf("symlinked .opencodereview dir outside repo must be skipped, got %+v", pr)
+		t.Errorf("symlinked .btcodereview dir outside repo must be skipped, got %+v", pr)
 	}
 }
 
@@ -2021,7 +2021,7 @@ func TestLoadProjectRule_RejectsSymlinkedDir(t *testing.T) {
 // pointing outside the repo cannot be read.
 func TestLoadProjectRule_RejectsSymlinkedRuleFile(t *testing.T) {
 	repoDir := t.TempDir()
-	cfgDir := filepath.Join(repoDir, ".opencodereview")
+	cfgDir := filepath.Join(repoDir, ".btcodereview")
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -2230,7 +2230,7 @@ func TestLoadRuleFile(t *testing.T) {
 // unmarshal error, and success branches by pointing HOME at a temp dir.
 func TestLoadGlobalRule(t *testing.T) {
 	globalRulePath := func(home string) string {
-		return filepath.Join(home, ".opencodereview", "rule.json")
+		return filepath.Join(home, ".btcodereview", "rule.json")
 	}
 
 	t.Run("missing file is not an error", func(t *testing.T) {

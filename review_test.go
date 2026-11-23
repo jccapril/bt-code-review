@@ -156,7 +156,7 @@ func TestReviewAndViewer(t *testing.T) {
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
 		if path != "/" {
-			for _, want := range []string{"请求参数", "工具响应", "错误响应", "missing.swift", "let orders: [String] = []", "模型请求 2", "&lt;script&gt;"} {
+			for _, want := range []string{"模型请求 2 次 · 输入 40 · 输出 10 · 合计 50 token", "请求参数", "工具响应", "错误响应", "missing.swift", "let orders: [String] = []", "模型请求 2", "&lt;script&gt;"} {
 				if !strings.Contains(w.Body.String(), want) {
 					t.Errorf("viewer missing %q", want)
 				}
@@ -193,10 +193,14 @@ func TestHistoricalSourcesAndSecrets(t *testing.T) {
 func TestSubscriptionToolBatch(t *testing.T) {
 	h := conversation{}
 	items := []object{{"type": "reasoning", "encrypted_content": "opaque"}, {"type": "function_call", "call_id": "one", "name": "file_read", "arguments": "{}"}, {"type": "function_call", "call_id": "two", "name": "code_search", "arguments": "{}"}}
-	b, _ := json.Marshal(object{"type": "response.completed", "response": object{"status": "completed", "output": items}})
+	b, _ := json.Marshal(object{"type": "response.completed", "response": object{"status": "completed", "output": items, "usage": object{"input_tokens": 30, "output_tokens": 4, "input_tokens_details": object{"cached_tokens": 12, "cache_creation_tokens": 8}}}})
 	calls, e := responsesTurn(strings.NewReader(fmt.Sprintf("data: %s\n\n", b)), &h)
 	if e != nil || len(calls) != 2 || len(h.messages) != 3 {
 		t.Fatal(e, calls)
+	}
+	summary := FileReport{Requests: []RequestRecord{h.last, {}}}.Usage()
+	if summary.Total != 34 || summary.CacheWrite != 8 || summary.Cached != 12 || summary.Reported != 1 || summary.Requests != 2 {
+		t.Fatalf("unexpected usage: %+v", summary)
 	}
 	m := modelClient{cfg: config{Mode: "chatgpt"}}
 	m.addResult(&h, calls[1].ID, "matches")

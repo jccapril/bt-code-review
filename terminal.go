@@ -113,19 +113,9 @@ func (t terminal) finding(path string, f Finding) {
 	fmt.Fprintf(t.out, "\n%s\n%s %s\n", t.paint("2", fmt.Sprintf("─── %s:%d ───", cleanText(path, false), f.Line)), t.paint(c, "["+f.Severity+"]"), cleanText(f.Message, true))
 }
 
-type tokenUsage struct {
-	Input  int64
-	Output int64
-	Total  int64
-}
-
-func (u *tokenUsage) add(v tokenUsage) { u.Input += v.Input; u.Output += v.Output; u.Total += v.Total }
 func (u tokenUsage) String() string {
 	if u.Total == 0 && u.Input == 0 && u.Output == 0 {
 		return ""
-	}
-	if u.Total == 0 {
-		u.Total = u.Input + u.Output
 	}
 	return fmt.Sprintf(", ~%d token(s) used (input: ~%d, output: ~%d)", u.Total, u.Input, u.Output)
 }

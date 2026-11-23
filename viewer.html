@@ -1,19 +1,53 @@
+{{define "usage"}}模型请求 {{.Requests}} 次{{if .Reported}} · 输入 {{.Input}} · 输出 {{.Output}} · 合计 {{.Total}} token{{if .Cached}} · 缓存读取 {{.Cached}}{{end}}{{if .CacheWrite}} · 缓存写入 {{.CacheWrite}}{{end}}{{end}}{{if lt .Reported .Requests}} · {{.Reported}}/{{.Requests}} 次请求返回用量{{end}}{{end}}
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BT Code Review</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f8f9f6;color:#193333;font:16px/1.55 system-ui,sans-serif}header{background:#163a38;color:white;padding:16px max(5vw,24px)}header a{color:inherit;font-weight:700;text-decoration:none}main{max-width:1120px;margin:40px auto;padding:0 24px}h1{font-size:32px;letter-spacing:-.035em}a{color:#126b5d}article,details{background:white;border:1px solid #d4dfd9;border-radius:8px;margin:14px 0;padding:15px 18px}summary{cursor:pointer;font-weight:600;overflow-wrap:anywhere}.meta,small{color:#516660}.issue{border-left:3px solid #c68030;padding-left:14px}.issue p{white-space:pre-wrap}.patch{overflow:auto;background:#f4f6f4;padding:10px 0}.patch code{display:block;white-space:pre;padding:0 12px;font:13px/1.55 ui-monospace,monospace;min-height:1.55em}.added{background:#dff5de}.removed{background:#ffdfdf}.hunk{color:#236778}dd{margin:0}h2{font-size:21px}nav a{display:block}time{font-size:.9em}
 .tool pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:22rem;overflow:auto;background:#f4f6f4;padding:12px;font:13px/1.6 ui-monospace,monospace}.tool h4{margin:12px 0 4px}.tool pre{margin-top:0}.failed{color:#952f19}
-</style></head><body><header><a href="/">BT Code Review</a></header><main>
-{{with .Selected}}<a href="/">← 审核历史</a><h1>{{base .Repo}}</h1><p class="meta">{{stamp .Started}} · {{.Mode}} / {{.Model}} · {{.Status}}</p><p><small>{{.Repo}} {{.Revision}}</small></p>
-{{range .Files}}<article><h2>{{.Path}}</h2><p class="meta">{{.Status}} · {{len .Findings}} 条审核意见</p>{{if .Error}}<p>{{.Error}}</p>{{end}}
-{{range .Findings}}<div class="issue"><b>第 {{.Line}} 行 · {{.Severity}}</b><p>{{.Message}}</p></div>{{end}}
+input,select,button{font:inherit}button{cursor:pointer}label,button,select{margin:4px}pre{white-space:pre-wrap;overflow-wrap:anywhere}article,p,code{overflow-wrap:anywhere}[hidden]{display:none!important}nav.pager{display:flex;align-items:center;gap:10px}section{margin:24px 0}h3{margin-bottom:4px}
+</style><script src="/viewer.js" defer></script></head><body><header><a href="/">BT Code Review</a></header><main>
+{{if .Selected}}{{with .Selected}}
+<a href="/repo?path={{.Repo}}">← 仓库会话</a>
+<h1>{{base .Repo}}</h1>
+<p>{{.Repo}} · 会话 <code>{{.ID}}</code></p>
+<p class="meta">{{stamp .Started}} · {{.Mode}} / {{.Model}} · {{.Status}}{{with .Duration}} · 耗时 {{.}}{{end}}</p>
+<p>{{with .Branch}}分支 {{.}} · {{end}}{{.ReviewMode}} {{with .From}}{{.}} → {{end}}{{.Revision}}</p>
+{{with .Coverage}}<h2>审核覆盖</h2><p>选中 {{len $.Selected.Files}} · 完成 {{index . "complete"}} · 失败 {{index . "failed"}} · 进行中 {{index . "running"}} · 待审核 {{index . "pending"}}</p>{{end}}
+{{with .Usage}}{{if .Requests}}<section><h2>Token 用量</h2><p>{{template "usage" .}}{{if .Failures}} · 请求失败 {{.Failures}} 次{{end}}</p>
+<details><summary>按文件查看用量</summary><div data-page="20">{{range $.Selected.Files}}<p>{{.Path}} · {{with .Usage}}{{template "usage" .}}{{end}}</p>{{end}}</div></details></section>{{end}}{{end}}
+{{if index .Coverage "findings"}}
+<section><h2>审核意见（{{index .Coverage "findings"}}）</h2>
+<label>严重程度 <select id="severity"><option value="">全部</option></select></label>
+<label>类别 <select id="category"><option value="">全部</option></select></label>
+<label><input type="checkbox" id="hide-marked" checked>隐藏已标记</label><button id="clear-marks">清除全部标记</button> <span id="mark-count" aria-live="polite"></span>
+<div data-page="20" id="findings">
+{{range $i,$f := .Files}}{{range $j,$v := .Findings}}
+<article class="issue" data-mark="{{$i}}-{{$j}}" data-severity="{{.Severity}}" data-category="{{.Category}}">
+<b>{{$f.Path}} · 第 {{.Line}} 行 · {{.Severity}} {{.Category}}</b><p>{{.Message}}</p>{{template "code" .}}
+<button data-value="fixed">已修复</button><button data-value="ignored">已忽略</button><button data-value="">清除</button> <span data-state></span></article>
+{{end}}{{end}}</div></section>{{end}}
+<h2>文件与审核对话（{{len .Files}}）</h2>
+<div data-page="20">{{range .Files}}<article><h3>{{.Path}}</h3><p class="meta">{{.Status}} · {{len .Findings}} 条审核意见</p>{{if .Error}}<p class="failed">{{.Error}}</p>{{end}}
 <details><summary>代码差异</summary><div class="patch">{{range lines .Diff}}<code class="{{lineClass .}}">{{.}}</code>{{end}}</div></details>
-{{if .ToolCalls}}<details open><summary>工具调用（{{len .ToolCalls}}）</summary>
-{{$request := 0}}{{range .ToolCalls}}{{if ne $request .Request}}<h3>模型请求 {{.Request}}</h3>{{$request = .Request}}{{end}}
-<details class="tool"><summary><code>{{.Name}}</code> · {{if .OK}}成功{{else}}<span class="failed">失败</span>{{end}} · {{.DurationMS}} ms</summary>
+{{with .Cards}}<details open><summary>主审核任务 · 模型请求（{{len .}}）</summary><div data-page="20">
+{{range .}}<details class="tool"><summary>模型请求 {{.Number}}{{if .Recorded}} · {{.Model}} · {{.DurationMS}} ms{{end}}{{if .Error}} · 失败{{end}}</summary>
+{{with .Usage}}<p>输入 {{.Input}} · 输出 {{.Output}}{{if .Cached}} · 缓存读取 {{.Cached}}{{end}}{{if .CacheWrite}} · 缓存写入 {{.CacheWrite}}{{end}}</p>{{end}}
+{{with .Error}}<p class="failed">{{.}}</p>{{end}}{{with .Reasoning}}<h4>推理摘要</h4><pre>{{.}}</pre>{{end}}{{with .Response}}<h4>模型响应</h4><pre>{{.}}</pre>{{end}}
+{{range .Tools}}<details class="tool"><summary><code>{{.Name}}</code> · {{if .OK}}成功{{else}}<span class="failed">失败</span>{{end}} · {{.DurationMS}} ms</summary>
 <p class="meta">{{callTime .Started}} · 调用 ID <code>{{.ID}}</code></p>
-<h4>请求参数</h4><pre>{{prettyArgs .Arguments}}</pre>
-<h4>{{if .OK}}工具响应{{else}}错误响应{{end}}</h4><pre>{{.Result}}</pre></details>{{end}}</details>
-{{else if .Tools}}<details><summary>工具调用（{{len .Tools}}）</summary><p class="meta">此历史会话仅保存了工具名称。</p><ol>{{range .Tools}}<li>{{.}}</li>{{end}}</ol></details>{{end}}</article>{{end}}
-{{else}}<h1>审核历史</h1>{{range .Sessions}}<article><a href="/sessions/{{.ID}}"><b>{{base .Repo}}</b></a><div class="meta"><time>{{stamp .Started}}</time> · {{.Model}} · {{.Status}}</div></article>{{else}}<p>暂无审核记录。在 Git 仓库运行 <code>btcr review</code> 后刷新此页。</p>{{end}}{{end}}
+<h4>请求参数</h4><pre>{{prettyArgs .Arguments}}</pre><h4>{{if .OK}}工具响应{{else}}错误响应{{end}}</h4><pre>{{.Result}}</pre></details>{{end}}</details>{{end}}</div></details>
+{{else}}{{if .Tools}}<details><summary>工具调用（{{len .Tools}}）</summary><ol>{{range .Tools}}<li>{{.}}</li>{{end}}</ol></details>{{end}}{{end}}</article>{{end}}</div>
+{{end}}{{else if .Compare}}{{with .Compare}}
+<a href="/repo?path={{.After.Repo}}">← 仓库会话</a><h1>会话比较</h1><p>{{.After.Repo}}</p>
+<p><a href="/sessions/{{.Before.ID}}">{{.Before.ID}}</a> → <a href="/sessions/{{.After.ID}}">{{.After.ID}}</a></p>
+{{if ne .Before.ReviewMode .After.ReviewMode}}<p>两次审核模式不同，覆盖的文件可能不同。</p>{{end}}
+{{range .Groups}}<section><h2>{{.Title}}（{{len .Items}}）</h2><div data-page="20">{{range .Items}}<article><b>{{.Path}} · 第 {{.Line}} 行 · {{.Severity}} {{.Category}}</b><p>{{.Message}}</p>{{template "code" .Finding}}</article>{{end}}</div></section>{{end}}
+{{end}}{{else if .Repo}}{{with .Repo}}
+<a href="/">← 仓库列表</a><h1>{{base .Path}} · 审核历史</h1><p>{{.Path}}</p>
+<div data-page="10">{{range .Sessions}}<article><a href="/sessions/{{.ID}}"><code>{{.ID}}</code></a><p>{{stamp .Started}} · {{.Branch}} {{.Mode}} · {{.Model}} · {{.Status}}{{if .Duration}} · {{.Duration}}{{end}}</p>
+<p>{{.Files}} 个文件 · {{.Findings}} 条意见 {{if .Previous}} · <a href="/compare?before={{.Previous}}&amp;after={{.ID}}">与上次比较</a>{{end}}</p></article>{{end}}</div>
+{{end}}{{else}}<h1>审核仓库</h1>{{if .Repos}}<label>搜索仓库 <input type="search" id="repo-search"></label>
+<div data-page="10" id="repos">{{range .Repos}}<article data-path="{{.Path}}"><a href="/repo?path={{.Path}}"><b>{{base .Path}}</b></a><p>{{.Path}}</p><small>{{len .Sessions}} 次审核 · 最近活动 {{stamp (index .Sessions 0).Started}}</small></article>{{end}}</div>
+{{else}}<p>暂无审核记录。在 Git 仓库运行 <code>btcr review</code> 后刷新此页。</p>{{end}}{{end}}
 </main></body></html>
+{{define "code"}}{{with .ExistingCode}}<h4>现有代码</h4><pre>{{.}}</pre>{{end}}{{with .Suggestion}}<h4>建议代码</h4><pre>{{.}}</pre>{{end}}{{end}}
